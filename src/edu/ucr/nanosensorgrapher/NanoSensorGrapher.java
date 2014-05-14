@@ -99,6 +99,7 @@ public class NanoSensorGrapher extends WindowAdapter
 		int outlierRemoval = mDataProcessingPanel.getOutlierRemoval();
 		double outlierStdThreshold = mDataProcessingPanel.getOutlierStdThreshold();
 		int smoothDataPeriod = mDataProcessingPanel.getSmoothDataPeriod();
+		boolean baselineDrift = mDataProcessingPanel.getBaselineDrift();
 		
 		String fileList = "";
 		for (int i = 0; i < selectedFiles.size(); ++i) {
@@ -114,6 +115,7 @@ public class NanoSensorGrapher extends WindowAdapter
 			final int finalOutlierRemoval = outlierRemoval;
 			final double finalOutlierStdThreshold = outlierStdThreshold;
 			final int finalSmoothDataPeriod = smoothDataPeriod;
+			final boolean finalBaselineDrift = baselineDrift;
 			/**
 			 * Generate a new thread for each file since majority of time will be blocked
 			 * based on disk I/O.
@@ -123,7 +125,7 @@ public class NanoSensorGrapher extends WindowAdapter
 				@Override
 				public void run() {
 					try {
-						generateGraph(file, finalGasConcentration, finalOutlierRemoval, finalOutlierStdThreshold, finalSmoothDataPeriod);
+						generateGraph(file, finalGasConcentration, finalOutlierRemoval, finalOutlierStdThreshold, finalSmoothDataPeriod, finalBaselineDrift);
 					} catch (IOException e) {
 						JOptionPane.showMessageDialog(mFrame, ERROR_FILE_READ);
 						e.printStackTrace();
@@ -150,7 +152,8 @@ public class NanoSensorGrapher extends WindowAdapter
 		}
 	}
 	
-	public static void generateGraph(File file, String concentration, int outlierRemoval, double outlierStdThreshold, int smoothDataPeriod) throws IOException, FileException {
+	public static void generateGraph(File file, String concentration, int outlierRemoval, double outlierStdThreshold,
+			int smoothDataPeriod, boolean baselineDrift) throws IOException, FileException {
 		/** Read data from files and store into ArrayLists **/
 		BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
 		ArrayList<Double> timeData = new ArrayList<Double>();
@@ -181,8 +184,8 @@ public class NanoSensorGrapher extends WindowAdapter
 
 		/** Create graph **/
 		JFrame graphFrame = new JFrame(dataFileName);
-		GraphPanel graphPanel = 
-				new GraphPanel(timeData, resistanceData, concentration, dataFileName, outlierRemoval, outlierStdThreshold, smoothDataPeriod);
+		GraphPanel graphPanel = new GraphPanel(timeData, resistanceData, concentration, dataFileName, outlierRemoval,
+						outlierStdThreshold, smoothDataPeriod, baselineDrift);
 		graphFrame.setBackground(Color.WHITE);
 		graphFrame.getContentPane().add(graphPanel);
 		if (DEBUG_SHOW_FRAME) {

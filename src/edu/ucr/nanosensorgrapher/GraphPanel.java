@@ -35,7 +35,7 @@ public class GraphPanel extends JPanel
 	private static final int GRAPH_MINOR_AXIS_TICK_SIZE = 10;
 	private static final int GRAPH_MAJOR_AXIS_TICK_SIZE = 15;
 	private static final int GRAPH_TIME_AXIS_TICKS = 10;
-	private static final int GRAPH_TIME_AXIS_TICK_ROUNDOFF = 5;
+	private static final int GRAPH_TIME_AXIS_TICK_ROUNDOFF = 5; 
 	private static final int GRAPH_CONCENTRATION_AXIS_TICKS = 4;
 	private static final int GRAPH_RESISTANCE_AXIS_TICKS = 9;
 	private static final int GRAPH_RESISTANCE_AXIS_TICK_ROUNDOFF = 10; 
@@ -96,7 +96,7 @@ public class GraphPanel extends JPanel
 
 	public GraphPanel(ArrayList<Double> timeData,
 			ArrayList<Double> resistanceData,
-			String concentration, String fileName, int removeOutliers, double stdThreshold, int smoothDataPeriod) {
+			String concentration, String fileName, int removeOutliers, double stdThreshold, int smoothDataPeriod, boolean baselineDrift) {
 		super();
 		super.setSize(GRAPH_WIDTH, GRAPH_HEIGHT);
 		super.setPreferredSize(new Dimension(GRAPH_WIDTH, GRAPH_HEIGHT));
@@ -114,10 +114,59 @@ public class GraphPanel extends JPanel
 		for (int i = 0; i < removeOutliers; ++i) {
 			removeDataOutliers(stdThreshold);
 		}
+		if (baselineDrift) {
+			calculateBaselineDrift();
+		}
 		if (smoothDataPeriod > 0) {
 			smoothData(smoothDataPeriod);
 		}
 		calculateAxisValues();
+	}
+	
+	private void calculateBaselineDrift() {
+		ArrayList<Double> recoveryData = new ArrayList<Double>();
+		ArrayList<Double> recoveryTimeData = new ArrayList<Double>();
+		int startIndex = 0;
+		int stopIndex = findTimeIndex(DURATION_BASELINE, 0, mTime.size());
+		recoveryData.addAll(mNormalizedResistances.subList(0, stopIndex));
+		recoveryTimeData.addAll(mTime.subList(0, stopIndex));
+		for (int i = 0; i < mConcentrations.size(); ++i) {
+			double startTime = DURATION_BASELINE + DURATION_EXPOSURE * i;
+			double stopTime = startTime + DURATION_RECOVERY;
+			startIndex = findTimeIndex(startTime, stopIndex, mTime.size());
+			stopIndex = findTimeIndex(stopTime, startIndex, mTime.size());
+			recoveryData.addAll(mNormalizedResistances.subList(startIndex, stopIndex));
+			recoveryTimeData.addAll(mTime.subList(startIndex, stopIndex));
+		}
+		double startTime = DURATION_BASELINE + (DURATION_EXPOSURE + DURATION_RECOVERY) * mConcentrations.size();
+		startIndex = findTimeIndex(startTime, stopIndex, mTime.size());
+		recoveryData.addAll(mNormalizedResistances.subList(startIndex, mNormalizedResistances.size()));
+		recoveryTimeData.addAll(mTime.subList(startIndex, mTime.size()));
+		double sumX = 0;
+		double sumY = 0;
+		double sumXY = 0;
+		double sumX2 = 0;
+		for (int i = 0; i < recoveryData.size(); ++i) {
+			double normalizedResistance = recoveryData.get(i);
+			double time = recoveryTimeData.get(i);
+			sumX += time;
+			sumY += normalizedResistance;
+			sumXY += time * normalizedResistance;
+			sumX2 += time * time;
+		}
+		int size = recoveryData.size();
+		double slope = (size * sumXY - sumX * sumY) / (size * sumX2 - sumX * sumX);
+		double intercept = (sumY - slope * sumX) / size;
+		System.out.println("Slope: " + slope);
+		System.out.println("Intercept: " + intercept);
+		// TODO: Calculate and output r^2	
+		for (int i = 0; i < mNormalizedResistances.size(); ++i) {
+			double normalizedResistance = mNormalizedResistances.get(i);
+			double time = mTime.get(i);
+			double drift = time * slope + intercept;
+			normalizedResistance -= drift;
+			mNormalizedResistances.set(i, normalizedResistance);
+		}
 	}
 	
 	/**
@@ -203,12 +252,12 @@ public class GraphPanel extends JPanel
 			}
 
 			/** Calculate the max response for each exposure period **/
-			double time = mTime.get(i) - DURATION_BASELINE;
-			double periodMax = 0.0;
+			double time = mTime.get(i);
 			for (int j = 0; j < mConcentrations.size(); ++j) {
-				double exposureStart = j * DURATION_EXPOSURE + j * DURATION_RECOVERY;
-				double exposureEnd = exposureStart + DURATION_RECOVERY;
-				if (time > exposureStart && time < exposureEnd && 
+				double exposureStart = j * DURATION_EXPOSURE + j * DURATION_RECOVERY + DURATION_BASELINE;
+				double exposureEnd = exposureStart + DURATION_EXPOSURE;
+				double periodMax = mMaxResponses.get(j);
+				if (time >= exposureStart && time <= exposureEnd && 
 						Math.abs(periodMax) < Math.abs(normalizedResistance)) {
 						periodMax = normalizedResistance;
 						mMaxResponses.set(j, periodMax);
@@ -219,8 +268,8 @@ public class GraphPanel extends JPanel
 		mResistanceRange = mMaxResistance - mMinResistance;
 		mMaxResistance += mResistanceRange * 0.2;
 		mMinResistance -= mResistanceRange * 0.2;
-		
 		mResistanceRange = mMaxResistance - mMinResistance;
+
 		boolean smallResistance = false;
 		if (mResistanceRange < 100) {
 			mMaxResistance *= 1000;
@@ -257,7 +306,7 @@ public class GraphPanel extends JPanel
 		int timeStep = (int) mTimeAxis / (GRAPH_TIME_AXIS_TICKS);
 		if (timeStep % GRAPH_TIME_AXIS_TICK_ROUNDOFF != 0) {
 			mTimeAxis += (GRAPH_TIME_AXIS_TICK_ROUNDOFF -
-					(timeStep % GRAPH_TIME_AXIS_TICK_ROUNDOFF)) * GRAPH_TIME_AXIS_TICKS;
+					(timeStep % GRAPH_TIME_AXIS_TICK_ROUNDOFF)) * (GRAPH_TIME_AXIS_TICKS);
 		}
 	}
 	
@@ -335,19 +384,7 @@ public class GraphPanel extends JPanel
 					previousResistance = mNormalizedResistances.get(i - 1);
 				} else {
 					previousResistance = mNormalizedResistances.get(i + 1);
-				}
-				/**
-				periodAverage *= range;
-				periodAverage -= normalizedResistance;
-				periodAverage += previousResistance;
-				periodAverage /= range;
-				periodSquaredAverage *= range;
-				periodSquaredAverage -= normalizedResistance * normalizedResistance;
-				periodSquaredAverage += previousResistance * previousResistance;
-				periodSquaredAverage /= range;
-				periodVariance = periodSquaredAverage - periodAverage;
-				periodStd = Math.sqrt(periodVariance);
-				*/
+				} 
 				mNormalizedResistances.set(i, previousResistance);
 			}
 		}
@@ -404,7 +441,7 @@ public class GraphPanel extends JPanel
 				GRAPH_WIDTH - GRAPH_AXIS_PADDING,
 				GRAPH_HEIGHT - GRAPH_AXIS_PADDING);
 		int graphWidth = GRAPH_WIDTH - 2 * GRAPH_AXIS_PADDING;
-		int tickSpacing = graphWidth / (GRAPH_TIME_AXIS_TICKS + 1);
+		int tickSpacing = graphWidth / (GRAPH_TIME_AXIS_TICKS);
 		int timeSpacing = (int) (mTimeAxis / GRAPH_TIME_AXIS_TICKS);
 
 		g.setFont(new Font("Arial", Font.PLAIN, GRAPH_FONT_SIZE));

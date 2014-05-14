@@ -18,6 +18,7 @@ public class DataProcessingPanel extends JPanel {
 	private static final String REMOVE_OUTLIERS_LABEL = "Remove Outliers (Number of passes - 0 for no outlier removal):";
 	private static final String STD_THRESHOLD_LABEL = "Standard Deviation Threshold:";
 	private static final String SMOOTH_DATA_LABEL = "Apply Smooth Moving Average (Period - 0 for no smoothing):";
+	private static final String BASELINE_DRIFT_LABEL = "Account for baseline drift using simple linear regression";
 	
 	private JLabel mRemoveOutliersLabel;
 	private JSpinner mRemoveOutliers;
@@ -25,9 +26,10 @@ public class DataProcessingPanel extends JPanel {
 	private JSpinner mOutlierStdThreshold;
 	private JLabel mSmoothDataLabel;
 	private JSpinner mSmoothDataPeriod;
+	private JCheckBox mBaselineDriftCheckBox;
 
 	public DataProcessingPanel() {
-		super(new GridLayout(3, 1));
+		super(new GridLayout(4, 1));
 		super.setBorder(new EmptyBorder(10, 10, 10, 10));
 		mRemoveOutliersLabel = new JLabel(REMOVE_OUTLIERS_LABEL);
 		mRemoveOutliersLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -44,12 +46,14 @@ public class DataProcessingPanel extends JPanel {
 		mSmoothDataPeriod = new JSpinner();
 		mSmoothDataPeriod.setModel(new SpinnerNumberModel(0, 0, 10, 1));
 		mSmoothDataPeriod.setEditor(new JSpinner.NumberEditor(mSmoothDataPeriod, "##"));
+		mBaselineDriftCheckBox = new JCheckBox(BASELINE_DRIFT_LABEL);
 		super.add(mRemoveOutliersLabel);
 		super.add(mRemoveOutliers);
 		super.add(mOutlierStdThresholdLabel);
 		super.add(mOutlierStdThreshold);
 		super.add(mSmoothDataLabel);
 		super.add(mSmoothDataPeriod);
+		super.add(mBaselineDriftCheckBox);
 	}
 	
 	public int getOutlierRemoval() {
@@ -62,6 +66,10 @@ public class DataProcessingPanel extends JPanel {
 	
 	public int getSmoothDataPeriod() {
 		return (int) mSmoothDataPeriod.getValue();
+	}
+	
+	public boolean getBaselineDrift() {
+		return mBaselineDriftCheckBox.isSelected();
 	}
 
 }
